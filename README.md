@@ -1,4 +1,6 @@
 # cc-cz cheatsheet
 `fw.iptables` iptables rules for FW/GW
 
-`debsums <package>` check package hashes, require debsums package
+`dpkg -l` list installed packages
+
+`debsums <package>` check package hashes (openssh-client, openssh-server, openssl, apache2/httpd, php); require debsums package
