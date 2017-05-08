@@ -1,0 +1,16 @@
+#!/bin/bash
+
+--flush
+--table nat --flush
+--delete-chain
+--delete-chain
+
+# TO DO DELETE iptables -t nat PREROUTING !!!
+
+# Allow related, established conn
+-A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+-A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# TO DO ACCEPT GT db access : ICS check
+# TO DO ACCEPT BT db access from ICS WS
+# DENY the REST!
