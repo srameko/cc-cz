@@ -7,10 +7,30 @@
 
 # TO DO DELETE iptables -t nat PREROUTING !!!
 
-# Allow related, established conn
--A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# SPECIFY interfaces!
+
+# Allow related, established connections
 -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
-# TO DO ACCEPT GT db access : ICS check
-# TO DO ACCEPT BT db access from ICS WS
+# ALLOW icmp
+-A INPUT -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.4.3 -j ACCEPT
+-A OUTPUT -p icmp --icmp-type echo-reply -s 10.0.4.3 -d 10.0.3.0/24 -j ACCEPT
+
+# TO DO ACCEPT GT db access : ICS check ; ADD GT interface
+-A INPUT -p TCP --dport 5432 -d X.X.X.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+
+# TO DO ACCEPT BT db access from ICS WS ; ADD ICS WS IP
+-A INPUT -p TCP --dport 5432 -d 10.0.4.3 -s 10.0.4.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+
+# TO DO ACCESS BT (management from ws, only admin?) ; ADD WS IPs
+-A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+
 # DENY the REST!
+-A INPUT -j DROP
+-A FORWARD -j DROP
+-A OUTPUT -j DROP
+
+# SET DEFAULT iptables POLICY
+-P INPUT DROP
+-P FORWARD DROP
+-P OUTPUT -j DROP
