@@ -13,22 +13,25 @@
 -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
 # FW Allow
--A INPUT -p TCP -m state --state NEW --dport 80 -j ACCEPT
--A INPUT -p TCP -m state --state NEW --dport 443 -j ACCEPT
--A INPUT -p TCP -m state --state NEW --dport 22 -d 10.X.1.2 -j ACCEPT
--A OUTPUT -p TCP -m state --state ESTABLISHED,RELATED --sport 22 -j ACCEPT
--A INPUT -p TCP -m state --state NEW --dport 3000 -j ACCEPT
--A INPUT -p TCP -m state --state NEW --dport 5001 -j ACCEPT
--A INPUT -p icmp -j ACCEPT
--A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 443  -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 443  -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
-
-# 
 -A INPUT -i lo -j ACCEPT
+# HTTP on FW?
+-A INPUT -p TCP --dport 80 -d 10.X.1.2 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p TCP --dport 443 -d 10.X.1.2 -m conntrack --ctstate NEW -j ACCEPT
+# ssh
+-A INPUT -p TCP --dport 22 -d 10.X.1.2  -m conntrack --ctstate NEW -j ACCEPT
+-A OUTPUT -p TCP -s 10.X.1.2 --sport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# ntop
+-A INPUT -p TCP --dport 3000 -d 10.X.1.2 -s 10.0.2.X -m conntrack --ctstate NEW -j ACCEPT
+# icmp 
 -A INPUT -p ICMP --icmp-type echo-request -d 10.X.1.2 -j ACCEPT
 -A OUTPUT -p ICMP --icmp-type echo-reply -s 10.X.1.2 -j ACCEPT
-# ssh to fw-monitor; TO DO specify IP
--A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -d 10.X.1.2 -j ACCEPT
+
+# TO DO ???
+-A INPUT -p TCP -d 10.X.1.2 --dport 5001 -m conntrack --ctstate NEW -j ACCEPT
+
+# TO DO ???
+-A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 443  -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+-A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 443  -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
 
 # INTERNET
 -A INPUT -p TCP -d 10.0.1.0/24 -j ACCEPT
