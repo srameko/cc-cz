@@ -19,8 +19,8 @@
 # TO DO ACCEPT GT db access : ICS check ; ADD GT interface
 -A INPUT -p TCP --dport 5432 -d X.X.X.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
 
-# TO DO ACCEPT BT db access from ICS WS ; ADD ICS WS IP
--A INPUT -p TCP --dport 5432 -d 10.0.4.3 -s 10.0.4.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+# TO DO ACCEPT BT db access from ICS WS
+-A INPUT -p TCP --dport 5432 -d 10.0.4.3 -s 10.0.4.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
 
 # TO DO ACCESS BT (management from ws, only admin?) ; ADD WS IPs
 -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
