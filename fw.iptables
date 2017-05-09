@@ -15,8 +15,8 @@
 # FW Allow
 -A INPUT -p TCP -m state --state NEW --dport 80 -j ACCEPT
 -A INPUT -p TCP -m state --state NEW --dport 443 -j ACCEPT
--A INPUT -p TCP -m state --state NEW --dport 22 -j ACCEPT
--A OUTPUT -p TCP -m state --state NEW --sport 22 -j ACCEPT
+-A INPUT -p TCP -m state --state NEW --dport 22 -d 10.X.1.2 -j ACCEPT
+-A OUTPUT -p TCP -m state --state ESTABLISHED,RELATED --sport 22 -j ACCEPT
 -A INPUT -p TCP -m state --state NEW --dport 3000 -j ACCEPT
 -A INPUT -p TCP -m state --state NEW --dport 5001 -j ACCEPT
 -A INPUT -p icmp -j ACCEPT
@@ -25,8 +25,10 @@
 
 # 
 -A INPUT -i lo -j ACCEPT
--A INPUT -p icmp -j ACCEPT
--A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+-A INPUT -p ICMP --icmp-type echo-request -d 10.X.1.2 -j ACCEPT
+-A OUTPUT -p ICMP --icmp-type echo-reply -s 10.X.1.2 -j ACCEPT
+# ssh to fw-monitor; TO DO specify IP
+-A INPUT -p tcp --dport 22 -m conntrack --ctstate NEW -d 10.X.1.2 -j ACCEPT
 
 # INTERNET
 -A INPUT -p TCP -d 10.0.1.0/24 -j ACCEPT
@@ -35,12 +37,10 @@
 -A INPUT -p TCP -d 10.0.4.0/24 -j ACCEPT
 
 # GLOBAL > DMZ
+# dmz-web
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.3 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 80 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.3 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 443 -j ACCEPT
--A FORWARD -i eth4 -o eth0  -p TCP -d 10.0.1.5 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 53 -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p UDP -d 10.0.1.5 --dport 53 -j ACCEPT 
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.6 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 80 -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.6 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 443 -j ACCEPT
+# dmz-mail
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 993 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 3306 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 443 -j ACCEPT
@@ -50,7 +50,16 @@
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 995 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 25 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 587 -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d 10.0.1.0/24  -j ACCEPT
+# dmz-dns
+-A FORWARD -i eth4 -o eth0  -p TCP -d 10.0.1.5 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 53 -j ACCEPT
+-A FORWARD -i eth4 -o eth0 -p UDP -d 10.0.1.5 --dport 53 -j ACCEPT
+# dmz-support
+-A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.6 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 80 -j ACCEPT
+-A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.6 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 443 -j ACCEPT
+# icmp-to-dmz
+-A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d 10.0.1.0/24 -j ACCEPT
+-A FORWARD -i eth0 -o eth4 -p ICMP --icmp-type echo-reply -s 10.0.1.0/24 -j ACCEPT
+# TO DO ???
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --dport 20 -j ACCEPT
 -A FORWARD -i eth0 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
