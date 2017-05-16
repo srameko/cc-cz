@@ -21,8 +21,8 @@ SRV_AD=10.0.3.X
 SRV_FL=10.0.3.X
 SRV_DB=10.0.3.X
 ICS=10.0.4.0/24
-ICS_DB=10.0.4.X
-ICS_WS=10.0.4.X
+ICS_DB=10.0.4.3
+ICS_WS=10.0.4.4
 ICS_HS=10.0.4.X
 
 # Flush
@@ -32,185 +32,202 @@ $IPTABLES --table nat --flush
 $IPTABLES --delete-chain
 
 # Allow related, established conn
-echo " ALLOW related, established "
--A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+echo " ALLOW related, established connection "
+$IPTABLES -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+
+# KILL all traffic
+$IPTABLES -P INPUT -j DROP
+$IPTABLES -P FORWARD -j DROP
+$IPTABLES -P OUTPUT -j DROP
+
+# DROP invalid traffic
+$IPTABLES -A INPUT -m state --state INVALID -j DROP
+$IPTABLES -A FORWARD -m state --state INVALID -j DROP
+$IPTABLES -A OUTPUT -m state --state INVALID -j DROP
 
 # FW Allow
 echo " ALLOW traffic for FW "
--A INPUT -i lo -j ACCEPT
+$IPTABLES -A INPUT -i lo -j ACCEPT
 # HTTP on FW?
--A INPUT -p TCP --dport 80 -d 10.X.1.2 -m conntrack --ctstate NEW -j ACCEPT
--A INPUT -p TCP --dport 443 -d 10.X.1.2 -m conntrack --ctstate NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 80 -d $FW -m state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 443 -d $FW -m state NEW -j ACCEPT
 # ssh
--A INPUT -p TCP --dport 22 -d 10.X.1.2  -m conntrack --ctstate NEW -j ACCEPT
--A OUTPUT -p TCP -s 10.X.1.2 --sport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 22 -d $FW  -m state NEW -j ACCEPT
+$IPTABLES -A OUTPUT -p TCP -s $FW --sport 22 -m state ESTABLISHED,RELATED -j ACCEPT
 # ntop
--A INPUT -p TCP --dport 3000 -d 10.X.1.2 -s 10.0.2.X -m conntrack --ctstate NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A1 -m state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A2 -m state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A3 -m state NEW -j ACCEPT
 # icmp 
--A INPUT -p ICMP --icmp-type echo-request -d 10.X.1.2 -j ACCEPT
--A OUTPUT -p ICMP --icmp-type echo-reply -s 10.X.1.2 -j ACCEPT
+$IPTABLES -A INPUT -p ICMP --icmp-type echo-request -d $FW -j ACCEPT
+$IPTABLES -A OUTPUT -p ICMP --icmp-type echo-reply -s $FW -j ACCEPT
 
 # TO DO ???
--A INPUT -p TCP -d 10.X.1.2 --dport 5001 -m conntrack --ctstate NEW -j ACCEPT
--A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 443  -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 443  -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A INPUT -p TCP -d 10.X.1.2 --dport 5001 -m conntrack --ctstate NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 443  -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 443  -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
 
 # INTERNET
--A INPUT -p TCP -d 10.0.1.0/24 -j ACCEPT
--A INPUT -p TCP -d 10.0.2.0/24 -j ACCEPT
--A INPUT -p TCP -d 10.0.3.0/24 -j ACCEPT
--A INPUT -p TCP -d 10.0.4.0/24 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -d 10.0.1.0/24 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -d 10.0.2.0/24 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -d 10.0.3.0/24 -j ACCEPT
+#$IPTABLES -A INPUT -p TCP -d 10.0.4.0/24 -j ACCEPT
 
 # TO DO intra segment FW! (srv-srv,desktop-desktop,ics-ics,...)
 
 # GLOBAL > DMZ
 echo " ALLOW traffic for DMZ "
 # DoS "protection"
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m multiport --dport 80,443 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ -m multiport --dport 80,443 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
 # dmz-web
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.3 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_WEB -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 # dmz-mail
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.4 -m multiport --dports 25,587,110,143,993,995,80,443,3306 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_MAIL -m multiport --dports 25,587,110,143,993,995,80,443,3306 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 # dmz-dns
--A FORWARD -i eth4 -o eth0  -p TCP -d 10.0.1.5 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 53 -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p UDP -d 10.0.1.5 --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0  -p TCP -d $DMZ_DNS -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p UDP -d $DMZ_DNS --dport 53 -j ACCEPT
 # dmz-support
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.6 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_SUP -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 # icmp-to-dmz
--A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d 10.0.1.0/24 -j ACCEPT
--A FORWARD -i eth0 -o eth4 -p ICMP --icmp-type echo-reply -s 10.0.1.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d $DMZ -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p ICMP --icmp-type echo-reply -s $DMZ -j ACCEPT
+
 # TO DO ???
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --dport 20 -j ACCEPT
--A FORWARD -i eth0 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth4 -p UDP -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p UDP -j ACCEPT
--A FORWARD -i eth0 -o eth4 -p ICMP -j ACCEPT
--A FORWARD -i eth4 -o eth0 -p ICMP -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --dport 20 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p UDP -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p UDP -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p ICMP -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p ICMP -j ACCEPT
 
 # dmz-support > srv-?? ; CHECK if it is correct!
--A FORWARD -i eth0 -o eth2 -p TCP -s 10.0.1.6 -d 10.0.3.0/24 -m multiport --dports 389,1433,3306,5432 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth0 -p TCP -s 10.0.3.0/24 -d 10.0.1.6 -m multiport --sports 389,1433,3306,5432 -m state ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth2 -p UDP -s 10.0.1.0/24 -d 10.0.3.0/24 -m multiport --dports 123,389 -j ACCEPT
--A FORWARD -i eth2 -o eth0 -p UDP -s 10.0.3.0/24 -d 10.0.1.0/24 -m multiport --sports 123,389 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s 10.0.1.6 -d 10.0.3.0/24 -m multiport --dports 389,1433,3306,5432 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth0 -p TCP -s 10.0.3.0/24 -d 10.0.1.6 -m multiport --sports 389,1433,3306,5432 -m state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p UDP -s 10.0.1.0/24 -d 10.0.3.0/24 -m multiport --dports 123,389 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth0 -p UDP -s 10.0.3.0/24 -d 10.0.1.0/24 -m multiport --sports 123,389 -j ACCEPT
 
 # DESKTOP > SRV
 # ??? RDP/VNC to server segment?!
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 3389,5900 -m state NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 3389,5900 -m state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 3389,5900 -m state NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 3389,5900 -m state ESTABLISHED,RELATED -j ACCEPT
 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 88,389,464,135,139,445,3268,3269 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 88,389,464,135,139,445,3268,3269 -m state ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 88,389,464,135,139,445,3268,3269 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 88,389,464,135,139,445,3268,3269 -m state ESTABLISHED,RELATED -j ACCEPT 
 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT 
 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth1 -o eth2 -p UDP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 53 -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p UDP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 53 -j ACCEPT
--A FORWARD -i eth1 -o eth2 -p UDP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 123 -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p UDP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 123 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p UDP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p UDP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p UDP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 123 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p UDP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 123 -j ACCEPT
 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 22 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --dport 22 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --sport 22 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
--A FORWARD -i eth1 -o eth2 -p ICMP --icmp-type echo-request -s 10.0.2.0/24 -d 10.0.3.0/24 -j ACCEPT 
--A FORWARD -i eth2 -o eth1 -p ICMP --icmp-type echo-reply -s 10.0.3.0/24 -d 10.0.2.0/24 -j ACCEPT
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --sport 21 -j ACCEPT
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --sport 20 -j ACCEPT
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --dport 20 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p ICMP --icmp-type echo-request -s 10.0.2.0/24 -d 10.0.3.0/24 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p ICMP --icmp-type echo-reply -s 10.0.3.0/24 -d 10.0.2.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --sport 21 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 -m conntrack --ctstate NEW,ESTABLISHED,RELATED --sport 20 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 -m conntrack --ctstate ESTABLISHED,RELATED --dport 20 -j ACCEPT
 
 # DESKTOP > DMZ
--A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 22,3389 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 22,3389 -m state ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 22,3389 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 22,3389 -m state ESTABLISHED,RELATED -j ACCEPT 
 
--A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT
 
--A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 25,110,143,587,993,995 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 25,110,143,587,993,995 -m state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.0/24 -m multiport --dports 25,110,143,587,993,995 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.0/24 -d 10.0.2.0/24 -m multiport --sports 25,110,143,587,993,995 -m state ESTABLISHED,RELATED -j ACCEPT
 
--A FORWARD -i eth1 -o eth0 -p ICMP --icmp-type echo-request -s 10.0.2.0/24 -d 10.0.1.0/24  -j ACCEPT 
--A FORWARD -i eth1 -o eth0 -p ICMP --icmp-type echo-reply -s 10.0.2.0/24 -d 10.0.1.0/24  -j ACCEPT
--A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.5 -d 10.0.2.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth1 -o eth0 -p UDP -s 10.0.2.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT
--A FORWARD -i eth0 -o eth1 -p UDP -s 10.0.1.5 -d 10.0.2.0/24 --sport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p ICMP --icmp-type echo-request -s 10.0.2.0/24 -d 10.0.1.0/24  -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p ICMP --icmp-type echo-reply -s 10.0.2.0/24 -d 10.0.1.0/24  -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p TCP -s 10.0.2.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth1 -p TCP -s 10.0.1.5 -d 10.0.2.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth0 -p UDP -s 10.0.2.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth1 -p UDP -s 10.0.1.5 -d 10.0.2.0/24 --sport 53 -j ACCEPT
 
 # DESKTOP -> ICS 
--A FORWARD -i eth1 -o eth3 -p TCP -s 10.0.2.0/24 -d 10.0.4.0/24 -m multiport --dports 22,3389 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth3 -o eth1 -p TCP -s 10.0.4.0/24 -d 10.0.2.0/24 -m multiport --sports 22,3389 -m state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth3 -p TCP -s 10.0.2.0/24 -d 10.0.4.0/24 -m multiport --dports 22,3389 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth1 -p TCP -s 10.0.4.0/24 -d 10.0.2.0/24 -m multiport --sports 22,3389 -m state ESTABLISHED,RELATED -j ACCEPT
 
--A FORWARD -i eth1 -o eth3 -p icmp --icmp-type echo-request  -s 10.0.2.0/24 -d 10.0.4.0/24 -j ACCEPT
--A FORWARD -i eth3 -o eth1 -p icmp --icmp-type echo-reply  -s 10.0.4.0/24 -d 10.0.2.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth3 -p icmp --icmp-type echo-request  -s 10.0.2.0/24 -d 10.0.4.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth1 -p icmp --icmp-type echo-reply  -s 10.0.4.0/24 -d 10.0.2.0/24 -j ACCEPT
 
 # DESKTOP > Global net
--A FORWARD -i eth1 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth4 -o eth1 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth1 -o eth4 -p UDP -j ACCEPT
--A FORWARD -i eth4 -o eth1 -p UDP -j ACCEPT
--A FORWARD -i eth1 -o eth4 -p ICMP -j ACCEPT
--A FORWARD -i eth4 -o eth1 -p ICMP -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth1 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth4 -p UDP -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth1 -p UDP -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth4 -p ICMP -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth1 -p ICMP -j ACCEPT
 
 # SRV > DESKTOP
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --dport 3389 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --sport 3389 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --dport 5900 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --sport 5900 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth1 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.2.0/24 -j ACCEPT
--A FORWARD -i eth1 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.2.0/24 -d 10.0.3.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --dport 3389 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --sport 3389 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s 10.0.3.0/24 -d 10.0.2.0/24 --dport 5900 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s 10.0.2.0/24 -d 10.0.3.0/24 --sport 5900 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.2.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.2.0/24 -d 10.0.3.0/24 -j ACCEPT
 
 # SRV > DMZ 
--A FORWARD -i eth2 -o eth0 -p TCP -s 10.0.3.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth0 -o eth2 -p TCP -s 10.0.1.5 -d 10.0.3.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth0 -p UDP -s 10.0.3.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT 
--A FORWARD -i eth0 -o eth2 -p UDP -s 10.0.1.5 -d 10.0.3.0/24 --sport 53 -j ACCEPT 
--A FORWARD -i eth2 -o eth0 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.1.0/24 -j ACCEPT
--A FORWARD -i eth0 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.1.0/24 -d 10.0.3.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth0 -p TCP -s 10.0.3.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s 10.0.1.5 -d 10.0.3.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth0 -p UDP -s 10.0.3.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p UDP -s 10.0.1.5 -d 10.0.3.0/24 --sport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth0 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.1.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.1.0/24 -d 10.0.3.0/24 -j ACCEPT
 
 # SRV > ICS
--A FORWARD -i eth2 -o eth3 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.4.0/24 -j ACCEPT
--A FORWARD -i eth3 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.4.0/24 -d 10.0.3.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.4.0/24 -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p icmp --icmp-type echo-reply -s 10.0.4.0/24 -d 10.0.3.0/24 -j ACCEPT
 
 # SRV > Global net
--A FORWARD -i eth2 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth4 -o eth2 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth4 -p UDP -j ACCEPT
--A FORWARD -i eth2 -o eth4 -p ICMP -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth4 -p TCP -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth2 -p TCP -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth4 -p UDP -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth4 -p ICMP -j ACCEPT
 
 #ICS > SRV
--A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 445 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 445 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
--A FORWARD -i eth3 -o eth2 -p UDP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 53 -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p UDP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 53 -j ACCEPT 
--A FORWARD -i eth3 -o eth2 -p UDP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 123 -j ACCEPT 
--A FORWARD -i eth2 -o eth3 -p UDP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 123 -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 445 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 445 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 123 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 123 -j ACCEPT
 
--A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 -m multiport --dports 80,443 -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 -m multiport --sports 80,443 -m state ESTABLISHED,RELATED -j ACCEPT 
 
 #ICS > DMZ
--A FORWARD -i eth3 -o eth0 -p TCP -s 10.0.4.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth0 -o eth3 -p TCP -s 10.0.1.5 -d 10.0.4.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
--A FORWARD -i eth3 -o eth0 -p UDP -s 10.0.4.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT
--A FORWARD -i eth0 -o eth3 -p UDP -s 10.0.1.5 -d 10.0.4.0/24 --sport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth0 -p TCP -s 10.0.4.0/24 -d 10.0.1.5 --dport 53 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth3 -p TCP -s 10.0.1.5 -d 10.0.4.0/24 --sport 53 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth0 -p UDP -s 10.0.4.0/24 -d 10.0.1.5 --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth3 -p UDP -s 10.0.1.5 -d 10.0.4.0/24 --sport 53 -j ACCEPT
 
 # OUTPUT
--A OUTPUT -o lo -j ACCEPT
--A OUTPUT -p icmp -j ACCEPT
+$IPTABLES -A OUTPUT -o lo -j ACCEPT
+$IPTABLES -A OUTPUT -p icmp -j ACCEPT
 # TO DO ???
--A OUTPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
+$IPTABLES -A OUTPUT -p tcp --dport 22 -m conntrack --ctstate NEW -j ACCEPT
 
-# DROP rest
--A INPUT -j DROP
--A FORWARD -j DROP
--A OUTPUT -j DROP
+# SET DEFAULT iptables POLICY
+echo " SET default policy to DROP "
+$IPTABLES -P INPUT -j DROP
+$IPTABLES -P FORWARD -j DROP
+$IPTABLES -P OUTPUT -j DROP
 
 # SAVE
+echo " Saving iptables "
 iptables-save > /etc/firewall.rules -j ACCEPT
+
+echo " Let's have fun with Red Team "

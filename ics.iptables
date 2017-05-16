@@ -1,36 +1,68 @@
 #!/bin/bash
 
---flush
---table nat --flush
---delete-chain
---delete-chain
+IPTABLES=/sbin/iptables
+
+# objects/machines
+DMZ=10.0.1.0/24
+FW=10.X.1.2
+DMZ_WEB=10.0.1.3
+DMZ_MAIL=10.0.1.4
+DMZ_DNS=10.0.1.5
+DMZ_SUP=10.0.1.6
+DSK=10.0.2.0/24
+DSK_A1=10.0.2.X
+DSK_A2=10.0.2.X
+DSK_A3=10.0.2.X
+DSK_U1=10.0.2.X
+DSK_U2=10.0.2.X
+SRV=10.0.3.0/24
+SRV_WB=10.0.3.X
+SRV_AD=10.0.3.X
+SRV_FL=10.0.3.X
+SRV_DB=10.0.3.X
+ICS=10.0.4.0/24
+ICS_DB=10.0.4.3
+ICS_DB_GT=172.X.X.X
+ICS_WS=10.0.4.4
+ICS_HS=10.0.4.X
+
+# Flush
+echo " Flushing existing rules "
+$IPTABLES --flush
+$IPTABLES --table nat --flush
+$IPTABLES --delete-chain
 
 # TO DO DELETE iptables -t nat PREROUTING !!!
 
 # SPECIFY interfaces!
 
 # Allow related, established connections
--A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A OUTPUT -m state ESTABLISHED,RELATED -j ACCEPT
 
 # ALLOW icmp
--A INPUT -p icmp --icmp-type echo-request -s 10.0.3.0/24 -d 10.0.4.3 -j ACCEPT
--A OUTPUT -p icmp --icmp-type echo-reply -s 10.0.4.3 -d 10.0.3.0/24 -j ACCEPT
+$IPTABLES -A INPUT -p icmp --icmp-type echo-request -s $ICS_DB -d $ICS_DB -j ACCEPT
+$IPTABLES -A OUTPUT -p icmp --icmp-type echo-reply -s $ICS_DB -d $SRV -j ACCEPT
 
 # TO DO ACCEPT GT db access : ICS check ; ADD GT interface
--A INPUT -p TCP --dport 5432 -d X.X.X.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 5432 -d $ICS_DB_GT -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 
 # TO DO ACCEPT BT db access from ICS WS
--A INPUT -p TCP --dport 5432 -d 10.0.4.3 -s 10.0.4.4 -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 5432 -d $ICS_DB -s $ICS_WS -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 
 # TO DO ACCESS BT (management from ws, only admin?) ; ADD WS IPs
--A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m conntrack --ctstate NEW,ESTABLISHED,RELATED -j ACCEPT
-
-# DENY the REST!
--A INPUT -j DROP
--A FORWARD -j DROP
--A OUTPUT -j DROP
+$IPTABLES -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 22 -d 10.0.4.3 -s 10.0.2.X -m state NEW,ESTABLISHED,RELATED -j ACCEPT
 
 # SET DEFAULT iptables POLICY
--P INPUT DROP
--P FORWARD DROP
--P OUTPUT -j DROP
+$IPTABLES -P INPUT -j DROP
+$IPTABLES -P FORWARD -j DROP
+$IPTABLES -P OUTPUT -j DROP
+
+# SAVE
+echo " Saving iptables "
+iptables-save > /etc/firewall.rules -j ACCEPT
+
+echo " Let's have fun with Red Team "
