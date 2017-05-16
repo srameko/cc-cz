@@ -1,6 +1,8 @@
 #!/bin/bash
 
 IPTABLES=/sbin/iptables
+
+# objects/machines
 DMZ=10.0.1.0/24
 FW=10.X.1.2
 DMZ_WEB=10.0.1.3
