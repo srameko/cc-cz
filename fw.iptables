@@ -1,18 +1,41 @@
 #!/bin/bash
 
-# Flush
---flush
---table nat --flush
---delete-chain
---delete-chain
+IPTABLES=/sbin/iptables
+DMZ=10.0.1.0/24
+FW=10.X.1.2
+DMZ_WEB=10.0.1.3
+DMZ_MAIL=10.0.1.4
+DMZ_DNS=10.0.1.5
+DMZ_SUP=10.0.1.6
+DSK=10.0.2.0/24
+DSK_A1=10.0.2.X
+DSK_A2=10.0.2.X
+DSK_A3=10.0.2.X
+DSK_U1=10.0.2.X
+DSK_U2=10.0.2.X
+SRV=10.0.3.0/24
+SRV_WB=10.0.3.X
+SRV_AD=10.0.3.X
+SRV_FL=10.0.3.X
+SRV_DB=10.0.3.X
+ICS=10.0.4.0/24
+ICS_DB=10.0.4.X
+ICS_WS=10.0.4.X
+ICS_HS=10.0.4.X
 
-# TO DO DELETE iptables -t nat PREROUTING !!!
+# Flush
+echo " Flushing existing rules "
+$IPTABLES --flush
+$IPTABLES --table nat --flush
+$IPTABLES --delete-chain
 
 # Allow related, established conn
+echo " ALLOW related, established "
 -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 -A OUTPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 
 # FW Allow
+echo " ALLOW traffic for FW "
 -A INPUT -i lo -j ACCEPT
 # HTTP on FW?
 -A INPUT -p TCP --dport 80 -d 10.X.1.2 -m conntrack --ctstate NEW -j ACCEPT
@@ -40,6 +63,7 @@
 # TO DO intra segment FW! (srv-srv,desktop-desktop,ics-ics,...)
 
 # GLOBAL > DMZ
+echo " ALLOW traffic for DMZ "
 # DoS "protection"
 -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m multiport --dport 80,443 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
 # dmz-web
