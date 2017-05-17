@@ -27,9 +27,10 @@ ICS_HS=10.0.4.X
 
 # Flush
 echo " Flushing existing rules "
-$IPTABLES --flush
-$IPTABLES --table nat --flush
-$IPTABLES --delete-chain
+$IPTABLES -t nat -F
+$IPTABLES -t mangle -F
+$IPTABLES -F
+$IPTABLES -X
 
 # DROP Red Team IPs
 #$IPTABLES -t mangle -A PREROUTING -s X.X.X.X -j DROP
