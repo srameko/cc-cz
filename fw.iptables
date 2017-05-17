@@ -31,6 +31,9 @@ $IPTABLES --flush
 $IPTABLES --table nat --flush
 $IPTABLES --delete-chain
 
+# DROP Red Team IPs
+#$IPTABLES -t mangle -A PREROUTING -s X.X.X.X -j DROP
+
 # Allow related, established conn
 echo " ALLOW related, established connection "
 $IPTABLES -A INPUT -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
