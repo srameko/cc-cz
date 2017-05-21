@@ -116,19 +116,22 @@ echo " ALLOW traffic for FW "
 $IPTABLES -A INPUT -i lo -j ACCEPT
 
 # HTTP/HTTPS
-$IPTABLES -A INPUT -p TCP -m multiport --dports 80,443 -d $FW -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -i eth1 -p TCP -s $DSK -d 10.0.2.2 -m multiport --dports 80,443 -d $FW -m state --state NEW -j ACCEPT
 
 # ssh
 $IPTABLES -A INPUT -p TCP --dport 22 -d $FW  -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -p TCP --dport 22 -s $DSK -d 10.0.2.2 -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -p TCP --dport 22 -s $SRV -d 10.0.3.2 -m state --state NEW -j ACCEPT
 
 # ntop
-$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A1 -m state --state NEW -j ACCEPT
-$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A2 -m state --state NEW -j ACCEPT
-$IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A3 -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d 10.0.2.2 -s $DSK_A1 -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d 10.0.2.2 -s $DSK_A2 -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --dport 3000 -d 10.0.2.2 -s $DSK_A3 -m state --state NEW -j ACCEPT
 
-# RELATED, ESTABLISHED
-$IPTABLES -A INPUT -m --state ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A OUTPUT -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A INPUT -i eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -o eth1 -p TCP --sport 22 -s 10.0.2.2 -d $DSK -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -o eth2 -p TCP --sport 22 -s 10.0.3.2 -d $DSK -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A OUTPUT -o eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
 
 # icmp 
 $IPTABLES -A INPUT -p ICMP --icmp-type echo-request -d $FW -j ACCEPT
