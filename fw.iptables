@@ -3,27 +3,34 @@
 IPTABLES=/sbin/iptables
 
 # objects/machines
+GL_DNS=10.7.1.3
 DMZ=10.0.1.0/24
-FW=10.X.1.2
+FW_DMZ=10.0.1.2
+FW_DSK=10.0.2.2
+FW_SRV=10.0.3.2
+FW_ICS=10.0.4.2
+FW_UP=192.168.6.2
 DMZ_WEB=10.0.1.3
 DMZ_MAIL=10.0.1.4
 DMZ_DNS=10.0.1.5
 DMZ_SUP=10.0.1.6
 DSK=10.0.2.0/24
-DSK_A1=10.0.2.X
-DSK_A2=10.0.2.X
-DSK_A3=10.0.2.X
-DSK_U1=10.0.2.X
-DSK_U2=10.0.2.X
+DSK_A1=10.0.2.3
+DSK_A2=10.0.2.4
+DSK_A3=10.0.2.5
+DSK_U1=10.0.2.6
+DSK_U2=10.0.2.7
+DSK_U3=10.0.2.8
 SRV=10.0.3.0/24
-SRV_WB=10.0.3.X
-SRV_AD=10.0.3.X
-SRV_FL=10.0.3.X
-SRV_DB=10.0.3.X
+SRV_DB=10.0.3.3
+SRV_WB=10.0.3.4
+SRV_FL=10.0.3.5
+SRV_FL_OLD=10.0.3.123
+SRV_AD=10.0.3.9
 ICS=10.0.4.0/24
 ICS_DB=10.0.4.3
 ICS_WS=10.0.4.4
-ICS_HS=10.0.4.X
+ICS_HS=10.0.4.4
 
 # Flush
 echo " Flushing existing rules "
@@ -79,24 +86,27 @@ $IPTABLES -t mangle -A PREROUTING -i eth4 -s 10.0.4.0/24 -j DROP
 # FW Allow
 echo " ALLOW traffic for FW "
 $IPTABLES -A INPUT -i lo -j ACCEPT
-# HTTP on FW?
+
+# HTTP/HTTPS
 $IPTABLES -A INPUT -p TCP --dport 80 -d $FW -m state --state NEW -j ACCEPT
 $IPTABLES -A INPUT -p TCP --dport 443 -d $FW -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP -m multiport --sports 80,443 -m -state --state ESTABLISHED,RELATED -j ACCEPT
+
 # ssh
 $IPTABLES -A INPUT -p TCP --dport 22 -d $FW  -m state --state NEW -j ACCEPT
 $IPTABLES -A OUTPUT -p TCP -s $FW --sport 22 -m state --state ESTABLISHED,RELATED -j ACCEPT
+
 # ntop
 $IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A1 -m state --state NEW -j ACCEPT
 $IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A2 -m state --state NEW -j ACCEPT
 $IPTABLES -A INPUT -p TCP --dport 3000 -d $FW -s $DSK_A3 -m state --state NEW -j ACCEPT
+$IPTABLES -A INPUT -p TCP --sport 3000 -s $FW_DSK -m -state --state ESTABLISHED,RELATED -j ACCEPT
+
 # icmp 
 $IPTABLES -A INPUT -p ICMP --icmp-type echo-request -d $FW -j ACCEPT
 $IPTABLES -A OUTPUT -p ICMP --icmp-type echo-reply -s $FW -j ACCEPT
 
-# TO DO ???
-$IPTABLES -A INPUT -p TCP -d 10.X.1.2 --dport 5001 -m state --state NEW -j ACCEPT
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s 10.0.4.0/24 -d 10.0.3.0/24 --dport 443  -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --sport 443  -m state --state ESTABLISHED,RELATED -j ACCEPT 
+
 
 # INTERNET
 #$IPTABLES -A INPUT -p TCP -d 10.0.1.0/24 -j ACCEPT
@@ -108,26 +118,35 @@ $IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s 10.0.3.0/24 -d 10.0.4.0/24 --spor
 
 # GLOBAL > DMZ
 echo " ALLOW traffic for DMZ "
+
 # DoS "protection"
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ -m multiport --dport 80,443 -m limit --limit 25/minute --limit-burst 100 -j ACCEPT
+
 # dmz-web
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_WEB -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+
 # dmz-mail
-$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_MAIL -m multiport --dports 25,587,110,143,993,995,80,443,3306 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_MAIL -m multiport --dports 25,587,110,143,993,995,80,443 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+
 # dmz-dns
 $IPTABLES -A FORWARD -i eth4 -o eth0  -p TCP -d $DMZ_DNS -m state --state NEW,ESTABLISHED,RELATED --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -i eth4 -p TCP -s $DMZ_DNS -m state --state ESTABLISHED,RELATED --sport 53 -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p UDP -d $DMZ_DNS --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -i eth4 -p UDP -s $DMZ_DNS --sport 53 -j ACCEPT
+
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p TCP -s $DMZ_DNS -d $GL_DNS -m state --state NEW --dport53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -s $GL_DNS -d $DMZ_DNS -m state --state ESTABLISHED,RELATED --sport 53 -j ACCEPT
+$IPTABLES -A FORWARD -p UDP -s $DMZ_DNS -d $GL_DNS --dport 53 -j ACCEPT
+$IPTABLES -A FORWARD -p UDP -s $GL_DNS -d $DMZ_DNS --dport 53 -j ACCEPT
+
 # dmz-support
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_SUP -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
+
 # icmp-to-dmz
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d $DMZ -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth4 -p ICMP --icmp-type echo-reply -s $DMZ -j ACCEPT
 
 # TO DO ???
-$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m state --state NEW,ESTABLISHED,RELATED --dport 21 -j ACCEPT
-$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d 10.0.1.0/24 -m state --state ESTABLISHED,RELATED --dport 20 -j ACCEPT
-$IPTABLES -A FORWARD -i eth0 -o eth4 -p TCP -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth4 -p UDP -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p UDP -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth4 -p ICMP -j ACCEPT
@@ -198,6 +217,9 @@ $IPTABLES -A FORWARD -i eth1 -o eth4 -p UDP -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth1 -p UDP -j ACCEPT
 $IPTABLES -A FORWARD -i eth1 -o eth4 -p ICMP -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth1 -p ICMP -j ACCEPT
+
+# > DESKTOP
+$IPTABLES -A FORWARD -o eth1 -p TCP -d $DSK_U3 -m multiport --dports 22,5900 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
 
 # SRV > DESKTOP
 $IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s $SRV -d $DSK --dport 3389 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
