@@ -1,6 +1,7 @@
 #!/bin/bash
 
 IPTABLES=/sbin/iptables
+IP6TABLES=/sbin/ip6tables
 
 # objects/machines
 GL_DNS=10.7.1.3
@@ -25,7 +26,6 @@ SRV=10.0.3.0/28
 SRV_DB=10.0.3.3
 SRV_WB=10.0.3.4
 SRV_FL=10.0.3.5
-SRV_FL_OLD=10.0.3.123
 SRV_AD=10.0.3.9
 ICS=10.0.4.0/29
 ICS_DB=10.0.4.3
@@ -41,6 +41,13 @@ $IPTABLES -t nat -X
 $IPTABLES -t mangle -F
 $IPTABLES -t mangle -X
 
+$IP6TABLES -F
+$IP6TABLES -X
+$IP6TABLES -t nat -F
+$IP6TABLES -t nat -X
+$IP6TABLES -t mangle -F
+$IP6TABLES -t mangle -X
+
 # DROP Red Team IPs
 #$IPTABLES -t mangle -A PREROUTING -s X.X.X.X -j DROP
 
@@ -53,6 +60,10 @@ $IPTABLES -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -P INPUT DROP
 $IPTABLES -P FORWARD DROP
 $IPTABLES -P OUTPUT DROP
+
+$IP6TABLES -P INPUT DROP
+$IP6TABLES -P FORWARD DROP
+$IP6TABLES -P OUTPUT DROP
 
 # DROP invalid traffic
 $IPTABLES -t mangle -A PREROUTING -m state --state INVALID -j DROP  
@@ -123,6 +134,7 @@ $IPTABLES -A OUTPUT -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A INPUT -p ICMP --icmp-type echo-request -d $FW -j ACCEPT
 $IPTABLES -A OUTPUT -p ICMP --icmp-type echo-reply -s $FW -j ACCEPT
 
+###### DMZ ZONE
 # GLOBAL > DMZ
 echo " ALLOW traffic for DMZ "
 
@@ -147,7 +159,6 @@ $IPTABLES -A FORWARD -p UDP -s $GL_DNS -d $DMZ_DNS --dport 53 -j ACCEPT
 # dmz-support
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p TCP -d $DMZ_SUP -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth4 -o eth0 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth4 -m --state ESTABLISHED,RELATED -j ACCEPT
 
@@ -156,23 +167,29 @@ $IPTABLES -A FORWARD -i eth4 -o eth0 -p ICMP --icmp-type echo-request -d $DMZ -j
 $IPTABLES -A FORWARD -i eth0 -o eth4 -p ICMP --icmp-type echo-reply -s $DMZ -j ACCEPT
 
 # DMZ > SRV
-$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s $DMZ_XXX -d $SRV_XXX -m multiport --dports XXX,XXX -m state --state NEW -j ACCEPT
-
-$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s $DMZ_SUP -d $SRV_XXX -m multiport --dports 389,1433,3306,5432 -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s $DMZ_WEB -d $SRV_DB --dport 3306 -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s $DMZ_MAIL -d $SRV_AD --dport 389,3268,3269 -m state --state NEW -j ACCEPT
+$iPTABLES -A FORWARD -i eth0 -o eth2 -p UDP -s $DMZ_MAIL -d $SRV_AD --dport 389 -j ACCEPT
+$iPTABLES -A FORWARD -i eth2 -o eth0 -p UDP -s $SRV_AD -d $DMZ_MAIL --sport 389 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth2 -p TCP -s $DMZ_SUP -d $SRV_XXX -m multiport --dports 1433 -m state --state NEW -j ACCEPT
 
 $IPTABLES -A FORWARD -i eth0 -o eth2 -p UDP -s $DMZ -d $SRV -m multiport --dports 123,389 -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth0 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth2 -o eth0 -m --state ESTABLISHED,RELATED -j ACCEPT
 
+####### DESKTOP ZONE
 # DESKTOP > SRV
-# ??? RDP/VNC to server segment?!
-$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV -m multiport --dports 3389,5900 -m state --state NEW -j ACCEPT 
-
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_WB --dport 3389 -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_FL --dport 3389 -m state --state NEW -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_AD --dport 3389 -m state --state NEW -j ACCEPT
+ 
 $IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_DB --dport 22 -m state --state NEW -j ACCEPT
 
-$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_AD -m multiport --dports 88,389,464,135,139,445,3268,3269 -m state --state NEW -j ACCEPT7
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_AD -m multiport --dports 88,389,464,135,139,445,3268,3269 -m state --state NEW -j ACCEPT
+
+$IPTABLES -A FORWARD -i eth1 -o eth2 -p UDP -s $DSK -d $SRV_AD -m multiport --dports 53,88,123,389,464 -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth1 -p UDP -s $SRV_AD -d $DSK -m multiport --sports 53,88,123,389,464 -j ACCEPT
 
 $IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_FL -m multiport --dports 139,445 -m state --state NEW -j ACCEPT
 
@@ -180,15 +197,9 @@ $IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_WB -m multiport --dp
 
 $IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV_AD --dport 53 -m state --state NEW -j ACCEPT 
 
-$IPTABLES -A FORWARD -i eth1 -o eth2 -p UDP -s $DSK -d $SRV_AD --dport 53 -j ACCEPT
-$IPTABLES -A FORWARD -i eth2 -o eth1 -p UDP -s $SRV_AD -d $DSK --sport 53 -j ACCEPT
-$IPTABLES -A FORWARD -i eth1 -o eth2 -p UDP -s $DSK -d $SRV_AD --dport 123 -j ACCEPT
-$IPTABLES -A FORWARD -i eth2 -o eth1 -p UDP -s $SRV_AD -d $DSK --sport 123 -j ACCEPT
-
 $IPTABLES -A FORWARD -i eth1 -o eth2 -p ICMP --icmp-type echo-request -s $DSK -d $SRV -j ACCEPT 
 $IPTABLES -A FORWARD -i eth2 -o eth1 -p ICMP --icmp-type echo-reply -s $SRV -d $DSK -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth1 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth2 -o eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
 
@@ -217,6 +228,7 @@ $IPTABLES -A FORWARD -i eth0 -o eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
 
 # DESKTOP -> ICS
 $IPTABLES -A FORWARD -i eth1 -o eth3 -p TCP -s $DSK -d $ICS_DB --dport 22 -m state --state NEW -j ACCEPT 
+$IPTABLES -A FORWARD -i eth1 -o eth3 -p TCP -s $DSK -d $ICS_HS --dport 22 -m state --state NEW -j ACCEPT
 $IPTABLES -A FORWARD -i eth1 -o eth3 -p TCP -s $DSK -d $ICS_WS --dport 3389 -m state --state NEW -j ACCEPT
 $IPTABLES -A FORWARD -i eth1 -o eth3 -p TCP -s $DSK -d $ICS_HS --dport 3389 -m state --state NEW -j ACCEPT
 
@@ -230,6 +242,7 @@ $IPTABLES -A FORWARD -i eth3 -o eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
 # > DESKTOP
 #$IPTABLES -A FORWARD -o eth1 -p TCP -d $DSK_U3 -m multiport --dports 22,5900 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
 
+####### SRV ZONE
 # SRV > DESKTOP
 #$IPTABLES -A FORWARD -i eth2 -o eth1 -p TCP -s $SRV -d $DSK --dport 3389 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
 #$IPTABLES -A FORWARD -i eth1 -o eth2 -p TCP -s $DSK -d $SRV --sport 3389 -m state --state ESTABLISHED,RELATED -j ACCEPT 
@@ -245,7 +258,6 @@ $IPTABLES -A FORWARD -i eth0 -o eth2 -p UDP -s $DMZ_DNS -d $SRV --sport 53 -j AC
 $IPTABLES -A FORWARD -i eth2 -o eth0 -p icmp --icmp-type echo-request -s $SRV -d $DMZ -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth2 -p icmp --icmp-type echo-reply -s $DMZ -d $SRV -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth2 -o eth0 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
 
@@ -253,51 +265,47 @@ $IPTABLES -A FORWARD -i eth0 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth2 -o eth3 -p icmp --icmp-type echo-request -s $SRV -d $ICS -j ACCEPT
 $IPTABLES -A FORWARD -i eth3 -o eth2 -p icmp --icmp-type echo-reply -s $ICS -d $SRV -j ACCEPT
 
+####### ICS ZONE
+## ICS > SRV
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV --dport 445 -m state --state NEW -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV_AD --dport 53 -m state --state NEW -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s $ICS -d $SRV_AD --dport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s $SRV_AD -d $ICS --sport 53 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s $ICS -d $SRV_AD --dport 123 -j ACCEPT 
+$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s $SRV_AD -d $ICS --sport 123 -j ACCEPT
 
-#ICS > SRV
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV --dport 445 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s $SRV -d $ICS --sport 445 -m state --state ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV --dport 53 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s $SRV -d $ICS --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT 
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s $ICS -d $SRV --dport 53 -j ACCEPT 
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s $SRV -d $ICS --sport 53 -j ACCEPT 
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p UDP -s $ICS -d $SRV --dport 123 -j ACCEPT 
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p UDP -s $SRV -d $ICS --sport 123 -j ACCEPT
+$IPTABLES -A FORWARD -i eth3 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth2 -o eth3 -m --state ESTABLISHED,RELATED -j ACCEPT
 
-$IPTABLES -A FORWARD -i eth3 -o eth2 -p TCP -s $ICS -d $SRV -m multiport --dports 80,443 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A FORWARD -i eth2 -o eth3 -p TCP -s $SRV -d $ICS -m multiport --sports 80,443 -m state --state ESTABLISHED,RELATED -j ACCEPT 
-
-#ICS > DMZ
-$IPTABLES -A FORWARD -i eth3 -o eth0 -p TCP -s $ICS -d $DMZ_DNS --dport 53 -m state --state NEW,ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A FORWARD -i eth0 -o eth3 -p TCP -s $DMZ_DNS -d $ICS --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
+## ICS > DMZ (DNS)
+$IPTABLES -A FORWARD -i eth3 -o eth0 -p TCP -s $ICS -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT
 $IPTABLES -A FORWARD -i eth3 -o eth0 -p UDP -s $ICS -d $DMZ_DNS --dport 53 -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -o eth3 -p UDP -s $DMZ_DNS -d $ICS --sport 53 -j ACCEPT
 
-# INTERNET
-# DESKTOP > Global net
+$IPTABLES -A FORWARD -i eth3 -o eth0 -m --state ESTABLISHED,RELATED -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth3 -m --state ESTABLISHED,RELATED -j ACCEPT
+
+###### INTERNET
+## DESKTOP > UPLINK
 $IPTABLES -A FORWARD -i eth1 -o eth4 -p TCP -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
 $IPTABLES -A FORWARD -i eth1 -o eth4 -p ICMP -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth1 -p ICMP -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth1 -o eth4 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth1 -m --state ESTABLISHED,RELATED -j ACCEPT
 
-# SRV > Global net
+## SRV > UPLINK
 $IPTABLES -A FORWARD -i eth2 -o eth4 -p TCP -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
-$IPTABLES -A FORWARD -i eth2 -o eth4 -p ICMP -j ACCEPT
-$IPTABLES -A FORWARD -i eth4 -o eth2 -p ICMP -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth2 -o eth4 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth2 -m --state ESTABLISHED,RELATED -j ACCEPT
 
-# ICS > Global net
+## ICS > UPLINK (only for preparation! after prep BLOCK uplink traffic)
 $IPTABLES -A FORWARD -i eth3 -o eth4 -p TCP -m multiport --dports 80,443 -m state --state NEW -j ACCEPT
 $IPTABLES -A FORWARD -i eth3 -o eth4 -p ICMP -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth3 -p ICMP -j ACCEPT
 
-# RELATED, ESTABLISHED
 $IPTABLES -A FORWARD -i eth3 -o eth4 -m --state ESTABLISHED,RELATED -j ACCEPT
 $IPTABLES -A FORWARD -i eth4 -o eth3 -m --state ESTABLISHED,RELATED -j ACCEPT
 
