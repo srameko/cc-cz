@@ -155,7 +155,7 @@ $IPTABLES -A FORWARD -i eth4 -o eth0  -p TCP -d $DMZ_DNS -m state --state NEW --
 $IPTABLES -A FORWARD -i eth4 -o eth0 -p UDP -d $DMZ_DNS --dport 53 -j ACCEPT
 $IPTABLES -A FORWARD -i eth0 -i eth4 -p UDP -s $DMZ_DNS --sport 53 -j ACCEPT
 
-$IPTABLES -A FORWARD -i eth0 -o eth4 -p TCP -s $DMZ_DNS -d $GL_DNS -m state --state NEW --dport53 -j ACCEPT
+$IPTABLES -A FORWARD -i eth0 -o eth4 -p TCP -s $DMZ_DNS -d $GL_DNS -m state --state NEW --dport 53 -j ACCEPT
 $IPTABLES -A FORWARD -p UDP -s $DMZ_DNS -d $GL_DNS --dport 53 -j ACCEPT
 $IPTABLES -A FORWARD -p UDP -s $GL_DNS -d $DMZ_DNS --dport 53 -j ACCEPT
 

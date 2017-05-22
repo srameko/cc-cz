@@ -110,18 +110,32 @@ $IPTABLES -A OUTPUT -i ethX -p TCP -s $DMZ_DNS -m multiport --dports 80,443 -m s
 $IPTABLES -A INPUT -i ethX -p TCP -d $DMZ_DNS -m multiport --sports 80,443 -m state --state ESTABLISHED,RELATED -j ACCEPT
 
 # DNS
-$IPTABLES -A OUTPUT -i ethX -p TCP -s $DMZ_MAIL -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT
-$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_MAIL -d $DMZ_DNS --dport 53 -j ACCEPT
-$IPTABLES -A INPUT -i ethX -p TCP -d $DMZ_MAIL -d $DMZ_DNS --sport 53 -m state --state ESTABLISHED,RELATED -j ACCEPT
-$IPTABLES -A INPUT -i ethX -p UDP -d $DMZ_MAIL -d $DMZ_DNS --sport 53 -j ACCEPT
+$IPTABLES -A INPUT -i ethX  -p TCP -d $DMZ_DNS -m state --state NEW --dport 53 -j ACCEPT
+$IPTABLES -A INPUT -i ethX -p UDP -d $DMZ_DNS --dport 53 -j ACCEPT
+$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_DNS --sport 53 -j ACCEPT
 
+$IPTABLES -A INPUT -i ethX -p TCP -s $DMZ_DNS -d $GL_DNS -m state --state NEW --dport 53 -j ACCEPT
+$IPTABLES -A INPUT -p UDP -s $DMZ_DNS -d $GL_DNS --dport 53 -j ACCEPT
+$IPTABLES -A OUTPUT -p UDP -s $GL_DNS -d $DMZ_DNS --dport 53 -j ACCEPT
 
+# DNS to network
+$IPTABLES -A INPUT -i ethX -p TCP -s $DMZ -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT 
+$IPTABLES -A INPUT -i ethX -p UDP -s $DMZ -d $DMZ_DNS --dport 53 -j ACCEPT 
+$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_DNS -d $DMZ --sport 53 -j ACCEPT 
 
-$IPTABLES -A INPUT -i eth2 -o eth0 -p TCP -s $SRV -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT 
-$IPTABLES -A INPUT -i eth2 -o eth0 -p UDP -s $SRV -d $DMZ_DNS --dport 53 -j ACCEPT 
-$IPTABLES -A OUTPUT -i eth0 -o eth2 -p UDP -s $DMZ_DNS -d $SRV --sport 53 -j ACCEPT 
+$IPTABLES -A INPUT -i ethX -p TCP -s $SRV -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT 
+$IPTABLES -A INPUT -i ethX -p UDP -s $SRV -d $DMZ_DNS --dport 53 -j ACCEPT 
+$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_DNS -d $SRV --sport 53 -j ACCEPT 
 
-$IPTABLES -A FORWARD -i ethX -p UDP -s $DMZ -d $SRV -m multiport --dports 123,389 -j ACCEPT
+$IPTABLES -A INPUT -i ethX -p TCP -s $DSK -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT 
+$IPTABLES -A INPUT -i ethX -p UDP -s $DSK -d $DMZ_DNS --dport 53 -j ACCEPT 
+$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_DNS -d $DSK --sport 53 -j ACCEPT
+
+$IPTABLES -A INPUT -i ethX -p TCP -s $ICS -d $DMZ_DNS --dport 53 -m state --state NEW -j ACCEPT 
+$IPTABLES -A INPUT -i ethX -p UDP -s $ICS -d $DMZ_DNS --dport 53 -j ACCEPT 
+$IPTABLES -A OUTPUT -i ethX -p UDP -s $DMZ_DNS -d $ICS --sport 53 -j ACCEPT 
+
+$IPTABLES -A FORWARD -i ethX -p UDP -s $DMZ -d $SRV_AD -m multiport --dports 123,389 -j ACCEPT
 
 
 # SET DEFAULT iptables POLICY
