@@ -115,6 +115,11 @@ $IPTABLES -A OUTPUT -d $DSK_A3 -j ACCEPT
 echo " ALLOW traffic for FW "
 $IPTABLES -A INPUT -i lo -j ACCEPT
 
+# kypo management
+$IPTABLES -A INPUT -d 172.16.0.0/16 -j ACCEPT
+$IPTABLES -A FORWARD -d 172.16.0.0/16 -j ACCEPT
+$IPTABLES -A OUTPUT -s 172.16.0.0/16 -j ACCEPT
+
 # HTTP/HTTPS
 $IPTABLES -A INPUT -i eth1 -p TCP -s $DSK -d 10.0.2.2 -m multiport --dports 80,443 -d $FW -m state --state NEW -j ACCEPT
 

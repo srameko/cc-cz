@@ -65,6 +65,10 @@ $IP6TABLES -P INPUT DROP
 $IP6TABLES -P FORWARD DROP
 $IP6TABLES -P OUTPUT DROP
 
+# kypo management
+$IPTABLES -A INPUT -d 172.16.0.0/16 -j ACCEPT
+$IPTABLES -A OUTPUT -s 172.16.0.0/16 -j ACCEPT
+
 # ALLOW icmp
 $IPTABLES -A INPUT -p icmp --icmp-type echo-request -s $ICS_DB -d $ICS_DB -j ACCEPT
 $IPTABLES -A OUTPUT -p icmp --icmp-type echo-reply -s $ICS_DB -d $SRV -j ACCEPT

@@ -97,6 +97,10 @@ $IPTABLES -t mangle -A PREROUTING -i eth4 -s 10.0.4.0/24 -j DROP
 
 $IPTABLES -A INPUT -i lo -j ACCEPT
 
+# kypo management
+$IPTABLES -A INPUT -d 172.16.0.0/16 -j ACCEPT
+$IPTABLES -A OUTPUT -s 172.16.0.0/16 -j ACCEPT
+
 # ssh
 $IPTABLES -A INPUT -p TCP --dport 22 -d $DMZ_MAIL  -m state --state NEW -j ACCEPT
 $IPTABLES -A OUTPUT -p TCP -s $DMZ_WEB --sport 22 -m state --state ESTABLISHED,RELATED -j ACCEPT

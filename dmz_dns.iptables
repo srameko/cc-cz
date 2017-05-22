@@ -94,6 +94,9 @@ $IPTABLES -t mangle -A PREROUTING -i eth4 -s 10.0.2.0/24 -j DROP
 $IPTABLES -t mangle -A PREROUTING -i eth4 -s 10.0.3.0/24 -j DROP
 $IPTABLES -t mangle -A PREROUTING -i eth4 -s 10.0.4.0/24 -j DROP
 
+# kypo management
+$IPTABLES -A INPUT -d 172.16.0.0/16 -j ACCEPT
+$IPTABLES -A OUTPUT -s 172.16.0.0/16 -j ACCEPT
 
 $IPTABLES -A INPUT -i lo -j ACCEPT
 
